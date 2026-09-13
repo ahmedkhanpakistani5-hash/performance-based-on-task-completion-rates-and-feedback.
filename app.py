@@ -1,17 +1,14 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
+import joblib
 import os
 
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_absolute_error, r2_score
 from groq import Groq
 
 
-# --------------------------------------------------
-# PAGE CONFIG
-# --------------------------------------------------
+# ------------------------------------------------
+# PAGE
+# ------------------------------------------------
 
 st.set_page_config(
     page_title="Intern Performance Predictor",
@@ -20,158 +17,35 @@ st.set_page_config(
 )
 
 
-# --------------------------------------------------
-# CUSTOM CSS
-# --------------------------------------------------
+# ------------------------------------------------
+# LOAD MODEL
+# ------------------------------------------------
 
-st.markdown("""
-<style>
-
-.main {
-    padding-top: 2rem;
-}
-
-.title {
-    font-size: 42px;
-    font-weight: 700;
-    text-align: center;
-}
-
-.subtitle {
-    text-align: center;
-    font-size: 18px;
-    margin-bottom: 30px;
-}
-
-.metric-card {
-    padding: 20px;
-    border-radius: 12px;
-    border: 1px solid #ddd;
-    text-align: center;
-}
-
-</style>
-""", unsafe_allow_html=True)
+@st.cache_resource
+def load_model():
+    return joblib.load("model.pkl")
 
 
-# --------------------------------------------------
+model = load_model()
+
+
+# ------------------------------------------------
 # TITLE
-# --------------------------------------------------
+# ------------------------------------------------
 
-st.markdown(
-    '<div class="title">📊 Intern Performance Predictor</div>',
-    unsafe_allow_html=True
-)
+st.title("📊 Intern Performance Predictor")
 
-st.markdown(
-    '<div class="subtitle">'
-    'Machine Learning + Groq AI to predict intern performance'
-    '</div>',
-    unsafe_allow_html=True
+st.write(
+    "Predict intern performance using Machine Learning "
+    "and generate an AI-powered performance analysis."
 )
 
 
-# --------------------------------------------------
-# CREATE SAMPLE TRAINING DATA
-# --------------------------------------------------
-
-@st.cache_data
-def create_dataset():
-
-    np.random.seed(42)
-
-    data = []
-
-    for i in range(300):
-
-        completion_rate = np.random.randint(50, 101)
-        completion_time = np.random.uniform(1, 12)
-        feedback_rating = np.random.uniform(1, 5)
-        attendance = np.random.randint(60, 101)
-        tasks_completed = np.random.randint(5, 31)
-        late_tasks = np.random.randint(0, 8)
-
-        performance = (
-            completion_rate * 0.35
-            + feedback_rating * 10 * 0.25
-            + attendance * 0.20
-            + tasks_completed * 1.2
-            - completion_time * 1.5
-            - late_tasks * 2
-        )
-
-        performance += np.random.normal(0, 5)
-
-        performance = max(0, min(100, performance))
-
-        data.append([
-            completion_rate,
-            completion_time,
-            feedback_rating,
-            attendance,
-            tasks_completed,
-            late_tasks,
-            performance
-        ])
-
-    columns = [
-        "Task_Completion_Rate",
-        "Average_Completion_Time",
-        "Feedback_Rating",
-        "Attendance",
-        "Tasks_Completed",
-        "Late_Tasks",
-        "Performance_Score"
-    ]
-
-    return pd.DataFrame(data, columns=columns)
-
-
-df = create_dataset()
-
-
-# --------------------------------------------------
-# TRAIN MACHINE LEARNING MODEL
-# --------------------------------------------------
-
-features = [
-    "Task_Completion_Rate",
-    "Average_Completion_Time",
-    "Feedback_Rating",
-    "Attendance",
-    "Tasks_Completed",
-    "Late_Tasks"
-]
-
-X = df[features]
-y = df["Performance_Score"]
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.20,
-    random_state=42
-)
-
-model = RandomForestRegressor(
-    n_estimators=200,
-    random_state=42,
-    max_depth=10
-)
-
-model.fit(X_train, y_train)
-
-predictions = model.predict(X_test)
-
-mae = mean_absolute_error(y_test, predictions)
-r2 = r2_score(y_test, predictions)
-
-
-# --------------------------------------------------
+# ------------------------------------------------
 # SIDEBAR
-# --------------------------------------------------
+# ------------------------------------------------
 
-st.sidebar.title("⚙️ Intern Information")
+st.sidebar.header("Intern Information")
 
 task_completion = st.sidebar.slider(
     "Task Completion Rate (%)",
@@ -180,12 +54,12 @@ task_completion = st.sidebar.slider(
     80
 )
 
-completion_time = st.sidebar.slider(
+completion_time = st.sidebar.number_input(
     "Average Task Completion Time (hours)",
-    1.0,
-    20.0,
-    5.0,
-    0.5
+    min_value=0.5,
+    max_value=20.0,
+    value=5.0,
+    step=0.5
 )
 
 feedback = st.sidebar.slider(
@@ -218,9 +92,9 @@ late_tasks = st.sidebar.number_input(
 )
 
 
-# --------------------------------------------------
-# PREDICTION
-# --------------------------------------------------
+# ------------------------------------------------
+# PREDICT
+# ------------------------------------------------
 
 input_data = pd.DataFrame({
     "Task_Completion_Rate": [task_completion],
@@ -231,88 +105,103 @@ input_data = pd.DataFrame({
     "Late_Tasks": [late_tasks]
 })
 
+
 prediction = model.predict(input_data)[0]
 
 prediction = max(0, min(100, prediction))
 
 
-# --------------------------------------------------
-# PERFORMANCE CATEGORY
-# --------------------------------------------------
+# ------------------------------------------------
+# CATEGORY
+# ------------------------------------------------
 
 if prediction >= 75:
+
     category = "Likely to Excel"
     emoji = "🟢"
 
 elif prediction >= 55:
+
     category = "Average Performance"
     emoji = "🟡"
 
 else:
+
     category = "Likely to Struggle"
     emoji = "🔴"
 
 
-# --------------------------------------------------
-# MAIN RESULTS
-# --------------------------------------------------
+# ------------------------------------------------
+# RESULTS
+# ------------------------------------------------
 
-st.subheader("🎯 Prediction")
+st.header("🎯 Prediction Result")
 
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 
 with col1:
+
     st.metric(
         "Predicted Performance",
         f"{prediction:.1f}/100"
     )
 
 with col2:
-    st.metric(
-        "Prediction Category",
-        category
-    )
 
-with col3:
     st.metric(
-        "Model R² Score",
-        f"{r2:.2f}"
+        "Prediction",
+        category
     )
 
 
 st.progress(int(prediction))
 
-st.markdown(
-    f"## {emoji} {category}"
-)
+st.subheader(f"{emoji} {category}")
 
 
-# --------------------------------------------------
-# MODEL PERFORMANCE
-# --------------------------------------------------
+# ------------------------------------------------
+# INPUT SUMMARY
+# ------------------------------------------------
 
-with st.expander("📈 Model Performance"):
+st.header("📋 Intern Summary")
 
-    col1, col2 = st.columns(2)
+summary = pd.DataFrame({
+    "Metric": [
+        "Task Completion",
+        "Completion Time",
+        "Feedback Rating",
+        "Attendance",
+        "Tasks Completed",
+        "Late Tasks"
+    ],
 
-    with col1:
-        st.metric(
-            "Mean Absolute Error",
-            f"{mae:.2f}"
-        )
+    "Value": [
+        f"{task_completion}%",
+        f"{completion_time} hours",
+        f"{feedback}/5",
+        f"{attendance}%",
+        tasks_completed,
+        late_tasks
+    ]
+})
 
-    with col2:
-        st.metric(
-            "R² Score",
-            f"{r2:.2f}"
-        )
+st.table(summary)
 
 
-# --------------------------------------------------
+# ------------------------------------------------
 # FEATURE IMPORTANCE
-# --------------------------------------------------
+# ------------------------------------------------
 
-st.subheader("🔍 What Influenced the Prediction?")
+st.header("🔍 Important Factors")
+
+features = [
+    "Task Completion Rate",
+    "Completion Time",
+    "Feedback Rating",
+    "Attendance",
+    "Tasks Completed",
+    "Late Tasks"
+]
 
 importance = pd.DataFrame({
     "Feature": features,
@@ -329,46 +218,40 @@ st.bar_chart(
 )
 
 
-# --------------------------------------------------
-# GROQ AI ANALYSIS
-# --------------------------------------------------
+# ------------------------------------------------
+# GROQ AI
+# ------------------------------------------------
 
-st.subheader("🤖 AI Performance Analysis")
+st.header("🤖 AI Performance Analysis")
 
-def get_groq_client():
+if st.button("Generate AI Analysis"):
 
     try:
+
         api_key = st.secrets["GROQ_API_KEY"]
 
     except Exception:
 
         api_key = os.getenv("GROQ_API_KEY")
 
+
     if not api_key:
-        return None
 
-    return Groq(api_key=api_key)
-
-
-if st.button("Generate AI Analysis"):
-
-    client = get_groq_client()
-
-    if client is None:
-
-        st.warning(
+        st.error(
             "Groq API key not found. "
-            "Please add GROQ_API_KEY to Streamlit Secrets."
+            "Add GROQ_API_KEY to Streamlit Secrets."
         )
 
     else:
 
+        client = Groq(api_key=api_key)
+
         prompt = f"""
-You are an HR analytics AI assistant.
+You are an expert HR analytics assistant.
 
-Analyze the following intern performance prediction.
+Analyze this intern performance prediction.
 
-Predicted performance score: {prediction:.1f}/100
+Performance score: {prediction:.1f}/100
 Category: {category}
 
 Task completion rate: {task_completion}%
@@ -378,19 +261,18 @@ Attendance: {attendance}%
 Tasks completed: {tasks_completed}
 Late tasks: {late_tasks}
 
-Provide:
+Give:
 
-1. A short performance summary.
-2. The strongest positive factors.
-3. The main areas of concern.
-4. Three practical recommendations for the intern.
-5. A short manager recommendation.
+1. Performance summary
+2. Strengths
+3. Areas for improvement
+4. Three recommendations
+5. Manager recommendation
 
-Keep the response professional, concise, and easy to understand.
+Keep it professional and concise.
 
-Important:
-Do not claim that this prediction is certain.
-Treat it as an ML-based estimate.
+Do not say the prediction is certain.
+It is only an ML-based estimate.
 """
 
         try:
@@ -400,7 +282,7 @@ Treat it as an ML-based estimate.
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert HR analytics assistant."
+                        "content": "You are an HR analytics expert."
                     },
                     {
                         "role": "user",
@@ -408,37 +290,23 @@ Treat it as an ML-based estimate.
                     }
                 ],
                 temperature=0.3,
-                max_tokens=800
+                max_tokens=700
             )
 
-            ai_response = response.choices[0].message.content
+            answer = response.choices[0].message.content
 
-            st.markdown(ai_response)
+            st.markdown(answer)
 
         except Exception as e:
 
-            st.error(
-                f"Groq API error: {str(e)}"
-            )
+            st.error(f"Groq error: {e}")
 
 
-# --------------------------------------------------
-# DATA PREVIEW
-# --------------------------------------------------
-
-with st.expander("📊 View Training Dataset"):
-
-    st.dataframe(
-        df.head(20),
-        use_container_width=True
-    )
-
-
-# --------------------------------------------------
+# ------------------------------------------------
 # FOOTER
-# --------------------------------------------------
+# ------------------------------------------------
 
-st.markdown("---")
+st.divider()
 
 st.caption(
     "Intern Performance Predictor | "
